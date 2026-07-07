@@ -1,89 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocPortal - Patient Registry</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+  :root { --bg: #080e1a; --panel: #0d1628; --border: #1a2640; --text: #cdd9ee; --text-dim: #5a6f8a; --blue: #4a9eff; --blue-dim: #4a9eff20; --green: #00e5a0; --red: #ff4d6a; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; margin: 0; min-height: 100vh;}
+  .header { padding: 24px 28px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--bg); position: sticky; top: 0; z-index: 10;}
+  .header h2 { margin: 0; font-weight: 600; }
+  .logout-btn { background: none; border: none; color: var(--red); cursor: pointer; font-size: 14px; font-weight: 600; text-decoration: none; }
+  
+  /* Form Section */
+  .assign-section { padding: 28px; border-bottom: 1px solid var(--border); background: #0a111e; }
+  .assign-section h3 { margin-top: 0; margin-bottom: 16px; font-size: 16px; color: var(--green); }
+  .form-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .form-row input { flex: 1; min-width: 150px; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 8px; outline: none; }
+  .form-row input:focus { border-color: var(--blue); }
+  .btn-add { background: var(--blue); color: #fff; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  
+  /* Grid Section */
+  .patient-grid { padding: 28px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .patient-card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; cursor: pointer; transition: all 0.3s; position: relative; }
+  .patient-card:hover { border-color: var(--blue); transform: translateY(-2px); }
+  .patient-name { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+  .patient-details { font-size: 13px; color: var(--text-dim); margin-bottom: 12px;}
+  .device-tag { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; background: #1a2640; color: var(--text); border: 1px solid #2a3a5a; font-family: monospace;}
+  .delete-btn { position: absolute; top: 20px; right: 20px; background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 18px; }
+  .delete-btn:hover { color: var(--red); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h2>Patient Registry</h2>
+  <a href="index.html" class="logout-btn">Logout</a>
+</div>
+
+<div class="assign-section">
+  <h3>Assign Device to New Patient</h3>
+  <div class="form-row">
+    <input type="text" id="p-name" placeholder="Patient Name (e.g., John Doe)">
+    <input type="text" id="p-room" placeholder="Room (e.g., ICU-3)">
+    <input type="text" id="p-device" placeholder="Hardware Device ID (e.g., rig_01)">
+    <button class="btn-add" onclick="addPatient()">Assign Rig</button>
+  </div>
+</div>
+
+<div class="patient-grid" id="grid">
+  </div>
+
 <script>
-// 1. Pull Patient & Device Info from URL
-const urlParams = new URLSearchParams(window.location.search);
-const patientName = urlParams.get('name') || "Unknown Patient";
-const patientRoom = urlParams.get('room') || "Unknown Room";
-const deviceId    = urlParams.get('device') || "rig_01"; // Fallback to rig_01
-
-document.getElementById('dash-patient-name').textContent = patientName;
-document.getElementById('dash-patient-room').textContent = patientRoom;
-
-// 2. DYNAMIC MQTT TOPICS based on mapped device
-const MQTT_BROKER = 'broker.hivemq.com';
-const MQTT_WS_PORT = 8884;
-
-// The Dashboard dynamically subscribes to THIS specific patient's rig!
-const MQTT_TOPIC = `crescent/vitals/${deviceId}/all`;
-const MQTT_PUB_TOPIC = `crescent/vitals/${deviceId}/trigger_bp`;
-
-document.getElementById('topicItem').innerHTML = `<div class="dot"></div><span>Device ID: ${deviceId}</span>`;
-
-let client, msgCount = 0, lastBPM = 0;
-
-function connectMQTT() {
-  client = new Paho.MQTT.Client(MQTT_BROKER, MQTT_WS_PORT, '/mqtt', 'WebDash_' + Math.random().toString(16).slice(2, 8));
-  
-  client.onConnectionLost = () => { 
-    document.getElementById('mqttStatusText').textContent = "Disconnected"; 
-    setTimeout(connectMQTT, 5000); 
-  };
-  
-  client.onMessageArrived = (msg) => {
-    try {
-      const data = JSON.parse(msg.payloadString);
-      msgCount++; 
-      document.getElementById('msgCount').textContent = msgCount + " messages from " + deviceId;
-      const f = data.finger === true;
-      
-      if (f && data.spo2 != null) { document.getElementById('spo2Num').textContent = parseFloat(data.spo2).toFixed(0); document.getElementById('spo2Num').className = 'value-num'; }
-      if (f && data.hr != null) { lastBPM = parseFloat(data.hr); document.getElementById('hrNum').textContent = lastBPM.toFixed(0); document.getElementById('hrNum').className = 'value-num'; document.getElementById('hrOverlay').textContent = lastBPM.toFixed(0) + " BPM"; document.getElementById('hrOverlay').classList.remove('dim'); }
-      if (!f) document.getElementById('hrOverlay').classList.add('dim');
-      if (data.sys != null && data.dia != null) { document.getElementById('sysNum').textContent = data.sys; document.getElementById('diaNum').textContent = data.dia; document.getElementById('sysNum').className = 'bp-row-value'; document.getElementById('diaNum').className = 'bp-row-value'; }
-    } catch(e) {}
-  };
-  
-  client.connect({ 
-    useSSL: true, 
-    onSuccess: () => { 
-      document.getElementById('mqttStatus').classList.add('connected'); 
-      document.getElementById('mqttStatusText').textContent = "Live"; 
-      client.subscribe(MQTT_TOPIC); // Subscribing to the mapped rig!
-    } 
-  });
-}
-
-function triggerBP() { 
-  if (client && client.isConnected()) { 
-    let m = new Paho.MQTT.Message("trigger"); 
-    m.destinationName = MQTT_PUB_TOPIC; // Sending trigger to the mapped rig!
-    client.send(m); 
-    alert(`Trigger Sent to ${deviceId}!`); 
-  } 
-}
-
-// 3. ECG Canvas
-const canvas = document.getElementById('ecgCanvas'), ctx = canvas.getContext('2d');
-let ecgPoints = [];
-function resize() { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; }
-window.addEventListener('resize', resize); resize();
-
-function drawECG() {
-  requestAnimationFrame(drawECG);
-  const w = canvas.width, h = canvas.height, mid = h/2, now = Date.now(), win = 3000;
-  ctx.clearRect(0,0,w,h);
-  ctx.strokeStyle = '#1a2640'; ctx.lineWidth = 0.5; for(let x=0;x<w;x+=40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-  ctx.strokeStyle = '#1e3050'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0,mid); ctx.lineTo(w,mid); ctx.stroke();
-  if (ecgPoints.length > 1) {
-    ecgPoints = ecgPoints.filter(p => (now - p.t) < win);
-    ctx.beginPath(); ctx.strokeStyle = '#00e5a0'; ctx.lineWidth = 2;
-    let s = false;
-    for (const p of ecgPoints) { let x = w - ((now - p.t)/win)*w, y = mid - (p.v*(h/80)); if(!s){ctx.moveTo(x,y);s=true;}else{ctx.lineTo(x,y);} }
-    ctx.stroke();
+  // Load patients from browser memory
+  function getPatients() {
+    let pts = localStorage.getItem('docPortalPatients');
+    if (!pts) {
+      // Default sample data
+      pts = [
+        { id: Date.now(), name: "Alice Smith", room: "Room 101", deviceId: "rig_01" }
+      ];
+      localStorage.setItem('docPortalPatients', JSON.stringify(pts));
+      return pts;
+    }
+    return JSON.parse(pts);
   }
-}
-function inject() { const now = Date.now(), p = lastBPM>0?(60000/lastBPM):800, s = [0,0,0,0,0,2,4,2,0,0,0,0,-2,30,-8,0,0,0,0,0,0,4,6,4,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]; s.forEach((v,i)=>ecgPoints.push({t:now+(i/s.length)*p,v})); }
-let lastInj = 0; setInterval(() => { if(lastBPM>0 && Date.now()-lastInj > 60000/lastBPM) { inject(); lastInj=Date.now(); } }, 50);
 
-drawECG();
-connectMQTT();
+  function savePatients(pts) {
+    localStorage.setItem('docPortalPatients', JSON.stringify(pts));
+    renderGrid();
+  }
+
+  function addPatient() {
+    const name = document.getElementById('p-name').value.trim();
+    const room = document.getElementById('p-room').value.trim();
+    const device = document.getElementById('p-device').value.trim();
+
+    if (!name || !room || !device) return alert("Please fill all fields to map a device.");
+
+    const pts = getPatients();
+    pts.push({ id: Date.now(), name: name, room: room, deviceId: device });
+    savePatients(pts);
+
+    // Clear inputs
+    document.getElementById('p-name').value = '';
+    document.getElementById('p-room').value = '';
+    document.getElementById('p-device').value = '';
+  }
+
+  function removePatient(e, id) {
+    e.stopPropagation(); // Prevent card click
+    if(confirm("Remove this patient and unassign the device?")) {
+      const pts = getPatients().filter(p => p.id !== id);
+      savePatients(pts);
+    }
+  }
+
+  function openDashboard(name, room, deviceId) {
+    const url = `dashboard.html?name=${encodeURIComponent(name)}&room=${encodeURIComponent(room)}&device=${encodeURIComponent(deviceId)}`;
+    window.location.href = url;
+  }
+
+  function renderGrid() {
+    const pts = getPatients();
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+
+    if(pts.length === 0) {
+      grid.innerHTML = '<div style="color: var(--text-dim);">No patients assigned. Add one above.</div>';
+      return;
+    }
+
+    pts.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'patient-card';
+      card.onclick = () => openDashboard(p.name, p.room, p.deviceId);
+      
+      card.innerHTML = `
+        <button class="delete-btn" onclick="removePatient(event, ${p.id})">×</button>
+        <div class="patient-name">${p.name}</div>
+        <div class="patient-details">Location: ${p.room}</div>
+        <div class="device-tag">Mapped Rig: ${p.deviceId}</div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  // Initial load
+  renderGrid();
 </script>
+</body>
+</html>
