@@ -105,7 +105,7 @@
 const urlParams = new URLSearchParams(window.location.search);
 const patientName = urlParams.get('name') || "Unknown Patient";
 const patientRoom = urlParams.get('room') || "Unknown Room";
-const deviceId = urlParams.get('deviceId') || "1"; // Fallback to "1" if not provided
+const deviceId = urlParams.get('device') || "1"; // Fallback to "1" if not provided
 
 document.getElementById('dash-patient-name').textContent = patientName;
 document.getElementById('dash-patient-room').textContent = patientRoom;
