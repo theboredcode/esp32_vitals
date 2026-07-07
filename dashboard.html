@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -90,8 +89,9 @@
       <div class="bp-row"><span>SYS</span><div class="bp-row-value stale" id="sysNum">---</div></div>
       <div class="bp-row"><span>DIA</span><div class="bp-row-value stale" id="diaNum">---</div></div>
     </div>
-    <div class="card-footer">
+    <div class="card-footer" style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
       <div id="bpTime">Waiting...</div>
+      <button onclick="triggerBP()" style="background: var(--amber); border: none; padding: 5px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; color: #000; font-size: 11px;">Trigger BP</button>
     </div>
   </div>
 </div>
@@ -101,20 +101,22 @@
 </div>
 
 <script>
-// 1. Pull Patient Info from URL
+// 1. Pull Patient Info and Device ID from URL
 const urlParams = new URLSearchParams(window.location.search);
 const patientName = urlParams.get('name') || "Unknown Patient";
 const patientRoom = urlParams.get('room') || "Unknown Room";
+const deviceId = urlParams.get('deviceId') || "1"; // Fallback to "1" if not provided
 
 document.getElementById('dash-patient-name').textContent = patientName;
 document.getElementById('dash-patient-room').textContent = patientRoom;
 
 // 2. MQTT Configuration
 const MQTT_BROKER = 'broker.hivemq.com';
-const MQTT_WS_PORT = 8884;
+const MQTT_WS_PORT = 8884; 
 
-// MODIFIED FOR DEMO: Hardcoded to bypass the device ID in the path
-const MQTT_TOPIC = `crescent/vitals//all`;
+// Dynamic topics matching the Arduino string concatenation
+const MQTT_TOPIC = `crescent/vitals/${deviceId}/all`;
+const MQTT_TRIGGER_TOPIC = `crescent/vitals/${deviceId}/trigger_bp`;
 
 let client, msgCount = 0, lastBPM = 0;
 
@@ -130,7 +132,7 @@ function connectMQTT() {
     try {
       const data = JSON.parse(msg.payloadString);
       msgCount++; 
-      document.getElementById('msgCount').textContent = msgCount + " messages from demo rig";
+      document.getElementById('msgCount').textContent = msgCount + " messages received";
       const f = data.finger === true;
       
       if (f && data.spo2 != null) { document.getElementById('spo2Num').textContent = parseFloat(data.spo2).toFixed(0); document.getElementById('spo2Num').className = 'value-num'; }
@@ -145,9 +147,21 @@ function connectMQTT() {
     onSuccess: () => { 
       document.getElementById('mqttStatus').classList.add('connected'); 
       document.getElementById('mqttStatusText').textContent = "Live"; 
-      client.subscribe(MQTT_TOPIC); // Subscribing to the demo topic!
+      client.subscribe(MQTT_TOPIC); // Subscribed to the dynamic topic
     } 
   });
+}
+
+// Function to trigger the BP read on the Arduino
+function triggerBP() {
+  if(client && client.isConnected()) {
+    // Send a simple payload to wake up the ESP32 trigger logic
+    const message = new Paho.MQTT.Message("trigger");
+    message.destinationName = MQTT_TRIGGER_TOPIC;
+    client.send(message);
+  } else {
+    alert("MQTT not connected yet.");
+  }
 }
 
 // 3. ECG Canvas
