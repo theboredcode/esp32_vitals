@@ -1,3 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vitals Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap');
+  :root { --bg: #080e1a; --panel: #0d1628; --border: #1a2640; --green: #00e5a0; --green-dim: #00e5a020; --amber: #f5a623; --amber-dim: #f5a62320; --blue: #4a9eff; --blue-dim: #4a9eff20; --red: #ff4d6a; --muted: #3a4a63; --text: #cdd9ee; --text-dim: #5a6f8a; --radius: 14px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 18px 28px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon { width: 32px; height: 32px; background: var(--green-dim); border: 1px solid var(--green); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .logo-text { font-size: 15px; font-weight: 600; text-transform: uppercase; }
+  .logo-sub { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+  .header-actions { display: flex; align-items: center; gap: 16px; }
+  .back-btn { background: none; border: 1px solid var(--border); color: var(--text); padding: 7px 14px; border-radius: 20px; font-size: 12px; cursor: pointer; text-decoration: none; }
+  .status-badge { display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 20px; font-size: 12px; border: 1px solid var(--border); }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .status-badge.connected { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+  .status-badge.connected .status-dot { background: var(--green); }
+  .ecg-section { padding: 0 28px; margin: 24px 0 8px; }
+  .ecg-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 8px; }
+  .ecg-container { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); height: 80px; position: relative; }
+  #ecgCanvas { width: 100%; height: 100%; display: block; }
+  .ecg-overlay { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; color: var(--green); }
+  .ecg-overlay.dim { opacity: 0.25; }
+  .dashboard-grid { flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; padding: 12px 28px 28px; }
+  @media (max-width: 720px) { .dashboard-grid { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; display: flex; flex-direction: column; gap: 10px; }
+  .card.spo2-card { --accent: var(--blue); } .card.hr-card { --accent: var(--green); } .card.bp-card { --accent: var(--amber); }
+  .card-header { display: flex; align-items: flex-start; justify-content: space-between; }
+  .card-label { font-size: 11px; text-transform: uppercase; color: var(--text-dim); text-align: right; }
+  .card-value { display: flex; align-items: flex-end; gap: 6px; min-height: 52px; }
+  .value-num, .bp-row-value { font-family: 'JetBrains Mono', monospace; font-size: 52px; font-weight: 700; color: var(--accent); }
+  .bp-row-value { font-size: 30px; }
+  .value-unit { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--accent); opacity: 0.6; }
+  .stale { color: var(--muted); }
+  .bp-row { display: flex; justify-content: space-between; width: 100%; align-items: center; }
+  .card-footer { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-dim); }
+  .status-bar { padding: 10px 28px; display: flex; gap: 20px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">❤</div>
+    <div>
+      <div class="logo-text" id="dash-patient-name">Loading...</div>
+      <div class="logo-sub" id="dash-patient-room">Loading...</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <a href="patients.html" class="back-btn">← Back to List</a>
+    <div class="status-badge" id="mqttStatus">
+      <div class="status-dot"></div>
+      <span id="mqttStatusText">Connecting...</span>
+    </div>
+  </div>
+</header>
+
+<div class="ecg-section">
+  <div class="ecg-label">Live ECG Rhythm</div>
+  <div class="ecg-container">
+    <canvas id="ecgCanvas"></canvas>
+    <div class="ecg-overlay dim" id="hrOverlay">-- BPM</div>
+  </div>
+</div>
+
+<div class="dashboard-grid">
+  <div class="card spo2-card">
+    <div class="card-header"><div class="card-label">Blood Oxygen</div></div>
+    <div class="card-value"><div class="value-num stale" id="spo2Num">--</div><div class="value-unit">%</div></div>
+    <div class="card-footer"><div id="spo2Time">Waiting...</div></div>
+  </div>
+
+  <div class="card hr-card">
+    <div class="card-header"><div class="card-label">Heart Rate</div></div>
+    <div class="card-value"><div class="value-num stale" id="hrNum">--</div><div class="value-unit">bpm</div></div>
+    <div class="card-footer"><div id="hrTime">Waiting...</div></div>
+  </div>
+
+  <div class="card bp-card">
+    <div class="card-header"><div class="card-label">Blood Pressure</div></div>
+    <div class="card-value" style="flex-direction: column; width: 100%;">
+      <div class="bp-row"><span>SYS</span><div class="bp-row-value stale" id="sysNum">---</div></div>
+      <div class="bp-row"><span>DIA</span><div class="bp-row-value stale" id="diaNum">---</div></div>
+    </div>
+    <div class="card-footer">
+      <div id="bpTime">Waiting...</div>
+      <button onclick="triggerBP()" class="back-btn">Trigger BP</button>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <span id="msgCount">0 messages received</span>
+</div>
+
 <script>
 // 1. Pull Patient & Device Info from URL
 const urlParams = new URLSearchParams(window.location.search);
@@ -87,3 +189,5 @@ let lastInj = 0; setInterval(() => { if(lastBPM>0 && Date.now()-lastInj > 60000/
 drawECG();
 connectMQTT();
 </script>
+</body>
+</html>
