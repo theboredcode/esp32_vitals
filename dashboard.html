@@ -1,3 +1,6 @@
+Here is the updated, complete HTML file. I have removed the "Trigger BP" button from the UI, deleted the `triggerBP` JavaScript function and its associated publish topic, and hardcoded the subscription topic to `crescent/vitals//all` for the demo. I also removed a stray line of JavaScript referencing `topicItem` that was causing console errors because that element doesn't exist in this HTML.
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -91,7 +94,6 @@
     </div>
     <div class="card-footer">
       <div id="bpTime">Waiting...</div>
-      <button onclick="triggerBP()" class="back-btn">Trigger BP</button>
     </div>
   </div>
 </div>
@@ -101,24 +103,20 @@
 </div>
 
 <script>
-// 1. Pull Patient & Device Info from URL
+// 1. Pull Patient Info from URL
 const urlParams = new URLSearchParams(window.location.search);
 const patientName = urlParams.get('name') || "Unknown Patient";
 const patientRoom = urlParams.get('room') || "Unknown Room";
-const deviceId    = urlParams.get('device') || "rig_01"; // Fallback to rig_01
 
 document.getElementById('dash-patient-name').textContent = patientName;
 document.getElementById('dash-patient-room').textContent = patientRoom;
 
-// 2. DYNAMIC MQTT TOPICS based on mapped device
+// 2. MQTT Configuration
 const MQTT_BROKER = 'broker.hivemq.com';
 const MQTT_WS_PORT = 8884;
 
-// The Dashboard dynamically subscribes to THIS specific patient's rig!
-const MQTT_TOPIC = `crescent/vitals/${deviceId}/all`;
-const MQTT_PUB_TOPIC = `crescent/vitals/${deviceId}/trigger_bp`;
-
-document.getElementById('topicItem').innerHTML = `<div class="dot"></div><span>Device ID: ${deviceId}</span>`;
+// MODIFIED FOR DEMO: Hardcoded to bypass the device ID in the path
+const MQTT_TOPIC = `crescent/vitals//all`;
 
 let client, msgCount = 0, lastBPM = 0;
 
@@ -134,7 +132,7 @@ function connectMQTT() {
     try {
       const data = JSON.parse(msg.payloadString);
       msgCount++; 
-      document.getElementById('msgCount').textContent = msgCount + " messages from " + deviceId;
+      document.getElementById('msgCount').textContent = msgCount + " messages from demo rig";
       const f = data.finger === true;
       
       if (f && data.spo2 != null) { document.getElementById('spo2Num').textContent = parseFloat(data.spo2).toFixed(0); document.getElementById('spo2Num').className = 'value-num'; }
@@ -149,18 +147,9 @@ function connectMQTT() {
     onSuccess: () => { 
       document.getElementById('mqttStatus').classList.add('connected'); 
       document.getElementById('mqttStatusText').textContent = "Live"; 
-      client.subscribe(MQTT_TOPIC); // Subscribing to the mapped rig!
+      client.subscribe(MQTT_TOPIC); // Subscribing to the demo topic!
     } 
   });
-}
-
-function triggerBP() { 
-  if (client && client.isConnected()) { 
-    let m = new Paho.MQTT.Message("trigger"); 
-    m.destinationName = MQTT_PUB_TOPIC; // Sending trigger to the mapped rig!
-    client.send(m); 
-    alert(`Trigger Sent to ${deviceId}!`); 
-  } 
 }
 
 // 3. ECG Canvas
@@ -191,3 +180,5 @@ connectMQTT();
 </script>
 </body>
 </html>
+
+```
