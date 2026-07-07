@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocPortal - Register</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+  :root { --bg: #080e1a; --panel: #0d1628; --border: #1a2640; --text: #cdd9ee; --text-dim: #5a6f8a; --green: #00e5a0; --red: #ff4d6a; --blue: #4a9eff; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+  .auth-card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 32px; width: 100%; max-width: 350px; }
+  h2 { text-align: center; margin-bottom: 24px; font-weight: 600; }
+  .form-group { margin-bottom: 20px; }
+  label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 8px; text-transform: uppercase; }
+  input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 14px; border-radius: 8px; box-sizing: border-box; outline: none;}
+  .btn-main { width: 100%; background: var(--green); color: var(--bg); border: none; padding: 14px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  .toggle-link { display: block; text-align: center; margin-top: 20px; color: var(--blue); font-size: 14px; cursor: pointer; text-decoration: none; }
+  .msg { font-size: 14px; text-align: center; margin-bottom: 15px; display: none; color: var(--red); }
+</style>
+</head>
+<body>
+
+<div class="auth-card">
+  <h2>Register Staff</h2>
+  <div id="reg-error" class="msg">Error during registration.</div>
+  
+  <div class="form-group">
+    <label>New Username</label>
+    <input type="text" id="reg-user" placeholder="Create username" autocomplete="off">
+  </div>
+  <div class="form-group">
+    <label>Password</label>
+    <input type="password" id="reg-pass" placeholder="Create password">
+  </div>
+  <div class="form-group">
+    <label>Confirm Password</label>
+    <input type="password" id="reg-confirm" placeholder="Type password again">
+  </div>
+  <button class="btn-main" onclick="authRegister()">Create Account</button>
+  <a href="index.html" class="toggle-link">Back to Login</a>
+</div>
+
+<script>
+  function loadUsers() {
+    return JSON.parse(localStorage.getItem('docPortalUsers')) || {};
+  }
+
+  function authRegister() {
+    const user = document.getElementById("reg-user").value.trim();
+    const pass = document.getElementById("reg-pass").value;
+    const conf = document.getElementById("reg-confirm").value;
+    const err  = document.getElementById("reg-error");
+
+    if (!user || !pass) { err.textContent = "Fields cannot be empty."; err.style.display = "block"; return; }
+    if (pass !== conf) { err.textContent = "Passwords do not match."; err.style.display = "block"; return; }
+    
+    const users = loadUsers();
+    if (users[user]) { err.textContent = "Username already exists."; err.style.display = "block"; return; }
+
+    // Save the new user to browser memory
+    users[user] = pass;
+    localStorage.setItem('docPortalUsers', JSON.stringify(users));
+    
+    alert("Registration successful! Please log in.");
+    window.location.href = "index.html"; // Redirect back to login page
+  }
+</script>
+</body>
+</html>

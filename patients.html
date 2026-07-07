@@ -1,0 +1,89 @@
+<script>
+// 1. Pull Patient & Device Info from URL
+const urlParams = new URLSearchParams(window.location.search);
+const patientName = urlParams.get('name') || "Unknown Patient";
+const patientRoom = urlParams.get('room') || "Unknown Room";
+const deviceId    = urlParams.get('device') || "rig_01"; // Fallback to rig_01
+
+document.getElementById('dash-patient-name').textContent = patientName;
+document.getElementById('dash-patient-room').textContent = patientRoom;
+
+// 2. DYNAMIC MQTT TOPICS based on mapped device
+const MQTT_BROKER = 'broker.hivemq.com';
+const MQTT_WS_PORT = 8884;
+
+// The Dashboard dynamically subscribes to THIS specific patient's rig!
+const MQTT_TOPIC = `crescent/vitals/${deviceId}/all`;
+const MQTT_PUB_TOPIC = `crescent/vitals/${deviceId}/trigger_bp`;
+
+document.getElementById('topicItem').innerHTML = `<div class="dot"></div><span>Device ID: ${deviceId}</span>`;
+
+let client, msgCount = 0, lastBPM = 0;
+
+function connectMQTT() {
+  client = new Paho.MQTT.Client(MQTT_BROKER, MQTT_WS_PORT, '/mqtt', 'WebDash_' + Math.random().toString(16).slice(2, 8));
+  
+  client.onConnectionLost = () => { 
+    document.getElementById('mqttStatusText').textContent = "Disconnected"; 
+    setTimeout(connectMQTT, 5000); 
+  };
+  
+  client.onMessageArrived = (msg) => {
+    try {
+      const data = JSON.parse(msg.payloadString);
+      msgCount++; 
+      document.getElementById('msgCount').textContent = msgCount + " messages from " + deviceId;
+      const f = data.finger === true;
+      
+      if (f && data.spo2 != null) { document.getElementById('spo2Num').textContent = parseFloat(data.spo2).toFixed(0); document.getElementById('spo2Num').className = 'value-num'; }
+      if (f && data.hr != null) { lastBPM = parseFloat(data.hr); document.getElementById('hrNum').textContent = lastBPM.toFixed(0); document.getElementById('hrNum').className = 'value-num'; document.getElementById('hrOverlay').textContent = lastBPM.toFixed(0) + " BPM"; document.getElementById('hrOverlay').classList.remove('dim'); }
+      if (!f) document.getElementById('hrOverlay').classList.add('dim');
+      if (data.sys != null && data.dia != null) { document.getElementById('sysNum').textContent = data.sys; document.getElementById('diaNum').textContent = data.dia; document.getElementById('sysNum').className = 'bp-row-value'; document.getElementById('diaNum').className = 'bp-row-value'; }
+    } catch(e) {}
+  };
+  
+  client.connect({ 
+    useSSL: true, 
+    onSuccess: () => { 
+      document.getElementById('mqttStatus').classList.add('connected'); 
+      document.getElementById('mqttStatusText').textContent = "Live"; 
+      client.subscribe(MQTT_TOPIC); // Subscribing to the mapped rig!
+    } 
+  });
+}
+
+function triggerBP() { 
+  if (client && client.isConnected()) { 
+    let m = new Paho.MQTT.Message("trigger"); 
+    m.destinationName = MQTT_PUB_TOPIC; // Sending trigger to the mapped rig!
+    client.send(m); 
+    alert(`Trigger Sent to ${deviceId}!`); 
+  } 
+}
+
+// 3. ECG Canvas
+const canvas = document.getElementById('ecgCanvas'), ctx = canvas.getContext('2d');
+let ecgPoints = [];
+function resize() { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; }
+window.addEventListener('resize', resize); resize();
+
+function drawECG() {
+  requestAnimationFrame(drawECG);
+  const w = canvas.width, h = canvas.height, mid = h/2, now = Date.now(), win = 3000;
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle = '#1a2640'; ctx.lineWidth = 0.5; for(let x=0;x<w;x+=40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+  ctx.strokeStyle = '#1e3050'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0,mid); ctx.lineTo(w,mid); ctx.stroke();
+  if (ecgPoints.length > 1) {
+    ecgPoints = ecgPoints.filter(p => (now - p.t) < win);
+    ctx.beginPath(); ctx.strokeStyle = '#00e5a0'; ctx.lineWidth = 2;
+    let s = false;
+    for (const p of ecgPoints) { let x = w - ((now - p.t)/win)*w, y = mid - (p.v*(h/80)); if(!s){ctx.moveTo(x,y);s=true;}else{ctx.lineTo(x,y);} }
+    ctx.stroke();
+  }
+}
+function inject() { const now = Date.now(), p = lastBPM>0?(60000/lastBPM):800, s = [0,0,0,0,0,2,4,2,0,0,0,0,-2,30,-8,0,0,0,0,0,0,4,6,4,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]; s.forEach((v,i)=>ecgPoints.push({t:now+(i/s.length)*p,v})); }
+let lastInj = 0; setInterval(() => { if(lastBPM>0 && Date.now()-lastInj > 60000/lastBPM) { inject(); lastInj=Date.now(); } }, 50);
+
+drawECG();
+connectMQTT();
+</script>

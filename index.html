@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocPortal - Login</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+  :root { --bg: #080e1a; --panel: #0d1628; --border: #1a2640; --text: #cdd9ee; --text-dim: #5a6f8a; --blue: #4a9eff; --red: #ff4d6a; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+  .auth-card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 32px; width: 100%; max-width: 350px; }
+  h2 { text-align: center; margin-bottom: 24px; font-weight: 600; }
+  .form-group { margin-bottom: 20px; }
+  label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 8px; text-transform: uppercase; }
+  input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 14px; border-radius: 8px; box-sizing: border-box; outline: none; }
+  input:focus { border-color: var(--blue); }
+  .btn-main { width: 100%; background: var(--blue); color: #fff; border: none; padding: 14px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  .toggle-link { display: block; text-align: center; margin-top: 20px; color: var(--blue); font-size: 14px; cursor: pointer; text-decoration: none; }
+  .msg { font-size: 14px; text-align: center; margin-bottom: 15px; display: none; color: var(--red); }
+</style>
+</head>
+<body>
+
+<div class="auth-card">
+  <h2>Doctor Login</h2>
+  <div id="login-error" class="msg">Invalid credentials.</div>
+  
+  <div class="form-group">
+    <label>Username</label>
+    <input type="text" id="login-user" placeholder="Enter username" autocomplete="off">
+  </div>
+  <div class="form-group">
+    <label>Password</label>
+    <input type="password" id="login-pass" placeholder="Enter password">
+  </div>
+  <button class="btn-main" onclick="authLogin()">Secure Login</button>
+  <a href="register.html" class="toggle-link">New Doctor? Register here</a>
+</div>
+
+<script>
+  function loadUsers() {
+    let users = JSON.parse(localStorage.getItem('docPortalUsers'));
+    if (!users) {
+      // Creates the default login if memory is empty
+      users = { "doctor": "admin123" };
+      localStorage.setItem('docPortalUsers', JSON.stringify(users));
+    }
+    return users;
+  }
+
+  function authLogin() {
+    const user = document.getElementById("login-user").value.trim();
+    const pass = document.getElementById("login-pass").value;
+    const users = loadUsers();
+
+    if (users[user] && users[user] === pass) {
+      // Login Success! Redirect to the Patient List
+      window.location.href = "patients.html";
+    } else {
+      // Login Failed
+      document.getElementById("login-error").style.display = "block";
+    }
+  }
+
+  // Allows pressing "Enter" on the keyboard to log in
+  document.getElementById("login-pass").addEventListener("keyup", e => { if(e.key === "Enter") authLogin(); });
+</script>
+</body>
+</html>
